@@ -1,96 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-
-// ─── Types ───────────────────────────────────────────
+import Link from "next/link";
+import { useState, useEffect } from "react";
 
 type Lang = "uz" | "ru" | "en";
-
-interface ToolCall {
-  name: string;
-  done: boolean;
-}
-
-interface Message {
-  id: string;
-  role: "user" | "ai";
-  content: string;
-  tools: ToolCall[];
-  streaming: boolean;
-}
-
-// ─── Constants ───────────────────────────────────────
-
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
-
-const TOOL_LABELS: Record<string, Record<Lang, string>> = {
-  find_competitors:   { uz: "Raqobatchilar qidirilmoqda",   ru: "Поиск конкурентов",   en: "Finding competitors"  },
-  find_nearby_helpers:{ uz: "Hamkorlar izlanmoqda",          ru: "Поиск партнёров",      en: "Finding partners"     },
-  get_market_stats:   { uz: "Bozor tahlil qilinmoqda",       ru: "Анализ рынка",         en: "Analysing market"     },
-  check_company_risks:{ uz: "Risklar tekshirilmoqda",        ru: "Проверка рисков",      en: "Checking risks"       },
-  search_laws:        { uz: "Qonunlar qidirilmoqda",         ru: "Поиск законов",        en: "Searching laws"       },
-};
-
-const STARTERS: Record<Lang, { icon: string; text: string }[]> = {
-  uz: [
-    { icon: "🏪", text: "Toshkentda supermarket ochmoqchiman, raqobatchilar bormi?" },
-    { icon: "🏗️", text: "Qurilish kompaniyasi ochish uchun litsenziya kerakmi?" },
-    { icon: "☕", text: "Yunusobodda kafe ochsam qanday imkoniyatlar bor?" },
-    { icon: "🔍", text: "INN bo'yicha kompaniya tekshirish: 202099756" },
-    { icon: "💡", text: "Kichik biznes uchun qanday soliq rejimlari bor?" },
-    { icon: "🌿", text: "Farg'onada fermer xo'jaligi ochish qanday?" },
-  ],
-  ru: [
-    { icon: "🏪", text: "Хочу открыть супермаркет в Ташкенте, есть конкуренты?" },
-    { icon: "🏗️", text: "Нужна ли лицензия для открытия строительной компании?" },
-    { icon: "☕", text: "Какие возможности для кафе в Юнусабаде?" },
-    { icon: "🔍", text: "Проверить компанию по ИНН: 202099756" },
-    { icon: "💡", text: "Какие налоговые режимы для малого бизнеса?" },
-    { icon: "🌿", text: "Как открыть фермерское хозяйство в Фергане?" },
-  ],
-  en: [
-    { icon: "🏪", text: "I want to open a supermarket in Tashkent. Any competitors?" },
-    { icon: "🏗️", text: "Do I need a license to open a construction company?" },
-    { icon: "☕", text: "What are my chances for a café in Yunusobod?" },
-    { icon: "🔍", text: "Check company by INN: 202099756" },
-    { icon: "💡", text: "What tax regimes are available for small business?" },
-    { icon: "🌿", text: "How to start a farm in Fergana?" },
-  ],
-};
-
-const WELCOME: Record<Lang, { title: string; desc: string; thinking: string; placeholder: string; hint: string; newChat: string; suggested: string }> = {
-  uz: {
-    title: "Biznes Maslahatchi",
-    desc: "O'zbekistonda biznes boshlash yoki rivojlantirish bo'yicha savollaringizni bering. 1.6 mln kompaniya ma'lumotlari va rasmiy qonunlar asosida yordam beramiz.",
-    thinking: "Tahlil qilinmoqda",
-    placeholder: "Savolingizni yozing...",
-    hint: "Enter — yuborish  ·  Shift+Enter — yangi qator",
-    newChat: "Yangi suhbat",
-    suggested: "Mashhur savollar",
-  },
-  ru: {
-    title: "Бизнес-Советник",
-    desc: "Задавайте вопросы о запуске или развитии бизнеса в Узбекистане. Ответы на основе базы 1,6 млн компаний и официального законодательства.",
-    thinking: "Анализирую",
-    placeholder: "Напишите ваш вопрос...",
-    hint: "Enter — отправить  ·  Shift+Enter — новая строка",
-    newChat: "Новый чат",
-    suggested: "Частые вопросы",
-  },
-  en: {
-    title: "Business Advisor",
-    desc: "Ask anything about starting or growing a business in Uzbekistan. Powered by 1.6M company records and official regulations.",
-    thinking: "Analysing",
-    placeholder: "Ask your question...",
-    hint: "Enter to send  ·  Shift+Enter for new line",
-    newChat: "New chat",
-    suggested: "Suggested",
-  },
-};
-
-// ─── Icons ───────────────────────────────────────────
 
 function GemIcon({ size = 28 }: { size?: number }) {
   return (
@@ -98,15 +11,6 @@ function GemIcon({ size = 28 }: { size?: number }) {
       <path d="M14 2.5L5 9.5 2 14l12 11.5L26 14l-3-4.5L14 2.5z" opacity="0.3" />
       <path d="M14 2.5l9 7-9 13.5L5 9.5l9-7z" opacity="0.6" />
       <path d="M14 2.5L5 9.5h18L14 2.5z" />
-    </svg>
-  );
-}
-
-function SendIcon() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="22" y1="2" x2="11" y2="13" />
-      <polygon points="22 2 15 22 11 13 2 9 22 2" />
     </svg>
   );
 }
@@ -131,192 +35,125 @@ function MoonIcon() {
   );
 }
 
-function PlusIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  );
-}
+const CONTENT: Record<Lang, {
+  trial: string;
+  tagline: string;
+  sub: string;
+  cta: string;
+  stat_companies: string;
+  stat_laws: string;
+  stat_tools: string;
+  how_title: string;
+  steps: { num: string; title: string; desc: string }[];
+  features: { icon: string; title: string; desc: string }[];
+  footer: string;
+}> = {
+  uz: {
+    trial: "Bepul sinab ko'ring",
+    tagline: "O'zbekiston SMBlari uchun AI maslahatchi",
+    sub: "Biznes boshlash, raqobat tahlili, qonun qidirish — barchasi bir joyda. 1.6 mln kompaniya ma'lumotlari asosida real javoblar.",
+    cta: "Bepul sinab ko'ring →",
+    stat_companies: "kompaniya",
+    stat_laws: "qonun",
+    stat_tools: "vosita",
+    how_title: "Qanday ishlaydi?",
+    steps: [
+      { num: "1", title: "Savol bering", desc: "O'zbek, rus yoki ingliz tilida istalgan savol yozing" },
+      { num: "2", title: "AI tahlil qiladi", desc: "1.6 mln kompaniya va 1800+ qonun asosida real vaqtda tahlil" },
+      { num: "3", title: "Aniq javob oling", desc: "Haqiqiy ma'lumotlarga asoslangan tavsiyalar va ko'rsatkichlar" },
+    ],
+    features: [
+      { icon: "🏪", title: "Bozor tahlili", desc: "Istalgan tuman yoki shaharda raqobat zichligi va imkoniyatlar" },
+      { icon: "🔍", title: "Kompaniya tekshiruvi", desc: "INN bo'yicha qarzlar, sud ishlari va kompaniya tarixi" },
+      { icon: "⚖️", title: "Qonun qidirish", desc: "1800+ rasmiy qonun va me'yoriy hujjatlar bazasidan qidirish" },
+      { icon: "💰", title: "Valyuta va Boj", desc: "Markaziy bank kurslari va import boj stavkalari kalkulyatori" },
+      { icon: "🤝", title: "Hamkorlar topish", desc: "Yaqin atrofdagi banklar, buxgalterlar, yuristlar, ta'minotchilar" },
+      { icon: "🎯", title: "Grant va kreditlar", desc: "Davlat dasturlari va kichik biznes uchun imtiyozli kreditlar" },
+    ],
+    footer: "Humora.uz ma'lumotlari asosida · Real vaqt ma'lumotlari",
+  },
+  ru: {
+    trial: "Попробовать бесплатно",
+    tagline: "ИИ-советник для малого бизнеса Узбекистана",
+    sub: "Начать бизнес, найти конкурентов, проверить законы — всё в одном месте. Реальные ответы на основе 1,6 млн компаний.",
+    cta: "Попробовать бесплатно →",
+    stat_companies: "компаний",
+    stat_laws: "законов",
+    stat_tools: "инструментов",
+    how_title: "Как это работает?",
+    steps: [
+      { num: "1", title: "Задайте вопрос", desc: "На узбекском, русском или английском — любой вопрос" },
+      { num: "2", title: "ИИ анализирует", desc: "1,6 млн компаний и 1800+ законов в реальном времени" },
+      { num: "3", title: "Получите ответ", desc: "Точные рекомендации на основе реальных данных и ссылок" },
+    ],
+    features: [
+      { icon: "🏪", title: "Анализ рынка", desc: "Плотность конкуренции в любом районе или городе" },
+      { icon: "🔍", title: "Проверка компании", desc: "Долги, судебные дела и история по ИНН" },
+      { icon: "⚖️", title: "Поиск законов", desc: "1800+ официальных законов и нормативных актов" },
+      { icon: "💰", title: "Валюта и Таможня", desc: "Курсы ЦБ в реальном времени и расчёт таможенных пошлин" },
+      { icon: "🤝", title: "Поиск партнёров", desc: "Ближайшие банки, бухгалтеры, юристы, поставщики" },
+      { icon: "🎯", title: "Гранты и кредиты", desc: "Государственные программы и льготные кредиты для МСБ" },
+    ],
+    footer: "На основе данных Humora.uz · Данные в реальном времени",
+  },
+  en: {
+    trial: "Try for free",
+    tagline: "AI business advisor for Uzbekistan's SMBs",
+    sub: "Start a business, find competitors, check laws — all in one place. Real answers powered by 1.6M company records.",
+    cta: "Try for free →",
+    stat_companies: "companies",
+    stat_laws: "laws",
+    stat_tools: "tools",
+    how_title: "How does it work?",
+    steps: [
+      { num: "1", title: "Ask a question", desc: "In Uzbek, Russian, or English — any business question" },
+      { num: "2", title: "AI analyses", desc: "1.6M companies and 1800+ laws analysed in real-time" },
+      { num: "3", title: "Get a real answer", desc: "Precise recommendations backed by actual data and sources" },
+    ],
+    features: [
+      { icon: "🏪", title: "Market Analysis", desc: "Competition density in any district or city of Uzbekistan" },
+      { icon: "🔍", title: "Company Check", desc: "Debts, court cases and full history by INN" },
+      { icon: "⚖️", title: "Law Search", desc: "1800+ official laws and regulatory documents" },
+      { icon: "💰", title: "Rates & Customs", desc: "Real-time CBU exchange rates and import duty calculator" },
+      { icon: "🤝", title: "Find Partners", desc: "Nearby banks, accountants, lawyers and suppliers" },
+      { icon: "🎯", title: "Grants & Loans", desc: "Government programs and subsidized loans for SMBs" },
+    ],
+    footer: "Powered by Humora.uz data · Real-time information",
+  },
+};
 
-// ─── Main component ───────────────────────────────────
-
-export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
+export default function LandingPage() {
   const [lang, setLang] = useState<Lang>("uz");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [sessionId] = useState<string>(() =>
-    typeof crypto !== "undefined" ? crypto.randomUUID() : `s-${Date.now()}`
-  );
 
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const t = WELCOME[lang];
-
-  // Load saved theme on mount
   useEffect(() => {
-    const saved = localStorage.getItem("humora-theme") as "dark" | "light" | null;
-    if (saved) setTheme(saved);
+    const savedTheme = localStorage.getItem("humora-theme") as "dark" | "light" | null;
+    if (savedTheme) setTheme(savedTheme);
   }, []);
 
-  // Apply theme to <html> and persist
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("humora-theme", theme);
   }, [theme]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    document.body.style.overflowY = "auto";
+    return () => {
+      document.body.style.overflowY = "";
+    };
+  }, []);
 
-  const resizeTextarea = () => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 160) + "px";
-  };
-
-  const sendMessage = useCallback(
-    async (overrideText?: string) => {
-      const text = (overrideText ?? input).trim();
-      if (!text || busy) return;
-
-      setInput("");
-      setBusy(true);
-      if (textareaRef.current) textareaRef.current.style.height = "auto";
-
-      const userMsg: Message = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: text,
-        tools: [],
-        streaming: false,
-      };
-
-      const aiId = crypto.randomUUID();
-      const aiMsg: Message = {
-        id: aiId,
-        role: "ai",
-        content: "",
-        tools: [],
-        streaming: true,
-      };
-
-      setMessages((prev) => [...prev, userMsg, aiMsg]);
-
-      try {
-        const res = await fetch(`${BACKEND}/api/chat/stream`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text, session_id: sessionId }),
-        });
-
-        if (!res.body) throw new Error("No stream");
-
-        const reader = res.body.getReader();
-        const dec = new TextDecoder();
-        let buf = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buf += dec.decode(value, { stream: true });
-          const lines = buf.split("\n");
-          buf = lines.pop() ?? "";
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const raw = line.slice(6).trim();
-            if (raw === "[DONE]") {
-              setMessages((prev) =>
-                prev.map((m) => (m.id === aiId ? { ...m, streaming: false } : m))
-              );
-              continue;
-            }
-            try {
-              const ev = JSON.parse(raw);
-              if (ev.type === "text") {
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === aiId ? { ...m, content: m.content + ev.content } : m
-                  )
-                );
-              } else if (ev.type === "tool_start") {
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === aiId
-                      ? { ...m, tools: [...m.tools, { name: ev.tool, done: false }] }
-                      : m
-                  )
-                );
-              } else if (ev.type === "tool_end") {
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === aiId
-                      ? {
-                          ...m,
-                          tools: m.tools.map((tc) =>
-                            tc.name === ev.tool ? { ...tc, done: true } : tc
-                          ),
-                        }
-                      : m
-                  )
-                );
-              } else if (ev.type === "error") {
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === aiId
-                      ? { ...m, content: `⚠️ Xato: ${ev.content}`, streaming: false }
-                      : m
-                  )
-                );
-              }
-            } catch {
-              // skip malformed line
-            }
-          }
-        }
-      } catch {
-        const errMap: Record<Lang, string> = {
-          uz: "Xatolik yuz berdi. Iltimos, qayta urinib ko'ring.",
-          ru: "Произошла ошибка. Пожалуйста, попробуйте снова.",
-          en: "An error occurred. Please try again.",
-        };
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === aiId ? { ...m, content: errMap[lang], streaming: false } : m
-          )
-        );
-      } finally {
-        setBusy(false);
-      }
-    },
-    [input, busy, sessionId, lang]
-  );
-
-  const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
+  const t = CONTENT[lang];
 
   return (
-    <div className="app">
-      {/* ── Header ──────────────────────────────── */}
-      <header className="header">
-        <div className="logo">
-          <span className="logo-wordmark">
-            HUMOR<span className="logo-accent">A</span>
-          </span>
-          <span className="logo-dot" />
-          <span className="logo-tagline">AI</span>
-        </div>
+    <div className="landing">
+      <div className="landing-bg-glow" />
 
+      {/* ── Navbar ───────────────────────────────── */}
+      <nav className="landing-topbar">
+        <div className="logo">
+          <div className="logo-icon"><GemIcon size={15} /></div>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div className="lang-switch">
             {(["uz", "ru", "en"] as Lang[]).map((l) => (
@@ -329,179 +166,79 @@ export default function ChatPage() {
               </button>
             ))}
           </div>
-
           <button
             className="theme-toggle"
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             aria-label="Toggle theme"
-            title={theme === "dark" ? "Light mode" : "Dark mode"}
           >
             {theme === "dark" ? <SunIcon /> : <MoonIcon />}
           </button>
+          <Link href="/chat" className="landing-trial-btn">{t.trial}</Link>
         </div>
-      </header>
+      </nav>
 
-      {/* ── Main ────────────────────────────────── */}
-      <div className="main">
-        {/* Sidebar */}
-        <aside className="sidebar">
-          <button
-            className="new-chat-btn"
-            onClick={() => setMessages([])}
-          >
-            <PlusIcon />
-            {t.newChat}
-          </button>
+      {/* ── Hero ─────────────────────────────────── */}
+      <section className="landing-hero">
+        <div className="landing-gem-wrap"><GemIcon size={40} /></div>
+        <h1 className="landing-title">
+          AI <span className="landing-title-accent">Maslahatchi</span>
+        </h1>
+        <p className="landing-tagline">{t.tagline}</p>
+        <p className="landing-sub">{t.sub}</p>
 
-          <div>
-            <div className="sidebar-label">{t.suggested}</div>
-            <div className="starter-list">
-              {STARTERS[lang].map((s, i) => (
-                <button
-                  key={i}
-                  className="starter-btn"
-                  onClick={() => sendMessage(s.text)}
-                >
-                  <span className="s-icon">{s.icon}</span>
-                  {s.text}
-                </button>
-              ))}
-            </div>
+        <div className="landing-stats">
+          <div className="landing-stat-item">
+            <span className="landing-stat-num">1.6M</span>
+            <span className="landing-stat-label">{t.stat_companies}</span>
           </div>
-        </aside>
-
-        {/* Chat */}
-        <div className="chat-area">
-          <div className="messages-list">
-            <div className="messages-inner">
-              {/* Welcome */}
-              {messages.length === 0 && (
-                <div className="welcome">
-                  <div className="welcome-gem">
-                    <GemIcon size={52} />
-                  </div>
-                  <h1 className="welcome-title">
-                    Humora <em>{t.title}</em>
-                  </h1>
-                  <p className="welcome-desc">{t.desc}</p>
-                  <div className="welcome-chips">
-                    {STARTERS[lang].slice(0, 3).map((s, i) => (
-                      <button
-                        key={i}
-                        className="welcome-chip"
-                        onClick={() => sendMessage(s.text)}
-                      >
-                        <span>{s.icon}</span>
-                        <span style={{ maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {s.text}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Messages */}
-              {messages.map((msg) => (
-                <div key={msg.id} className={`message msg-${msg.role}`}>
-                  {/* Avatar */}
-                  <div className="msg-avatar">
-                    {msg.role === "ai" ? (
-                      <GemIcon size={16} />
-                    ) : (
-                      <span style={{ fontSize: 10, letterSpacing: "0.05em" }}>
-                        {lang === "uz" ? "SIZ" : lang === "ru" ? "ВЫ" : "YOU"}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Bubble */}
-                  <div className="msg-bubble">
-                    {/* Tool pills */}
-                    {msg.tools.length > 0 && (
-                      <div className="tool-row">
-                        {msg.tools.map((tc, i) => (
-                          <span
-                            key={i}
-                            className={`tool-pill ${tc.done ? "tool-done" : "tool-active"}`}
-                          >
-                            {tc.done ? (
-                              <span className="t-check">✓</span>
-                            ) : (
-                              <span className="t-spin" />
-                            )}
-                            {TOOL_LABELS[tc.name]?.[lang] ?? tc.name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Content */}
-                    {msg.role === "ai" && msg.streaming && msg.content === "" ? (
-                      <div className="thinking-bubble">
-                        <div className="geo-spinner">
-                          <div className="geo-ring-outer" />
-                          <div className="geo-ring-inner" />
-                          <div className="geo-dot" />
-                        </div>
-                        <span className="thinking-text">{t.thinking}…</span>
-                      </div>
-                    ) : (
-                      <div
-                        className={[
-                          "msg-content",
-                          msg.role === "ai" && msg.streaming ? "streaming-cursor" : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                      >
-                        {msg.role === "ai" ? (
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {msg.content}
-                          </ReactMarkdown>
-                        ) : (
-                          msg.content
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              <div ref={bottomRef} />
-            </div>
+          <div className="landing-stat-sep" />
+          <div className="landing-stat-item">
+            <span className="landing-stat-num">1800+</span>
+            <span className="landing-stat-label">{t.stat_laws}</span>
           </div>
-
-          {/* Input */}
-          <div className="input-area">
-            <div className="input-wrapper">
-              <textarea
-                ref={textareaRef}
-                className="input-field"
-                value={input}
-                placeholder={t.placeholder}
-                rows={1}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  resizeTextarea();
-                }}
-                onKeyDown={handleKey}
-              />
-              <button
-                className="send-btn"
-                disabled={!input.trim() || busy}
-                onClick={() => sendMessage()}
-                aria-label="Send"
-              >
-                <SendIcon />
-              </button>
-            </div>
-            <div className="input-meta">
-              <span className="input-hint">{t.hint}</span>
-            </div>
+          <div className="landing-stat-sep" />
+          <div className="landing-stat-item">
+            <span className="landing-stat-num">11</span>
+            <span className="landing-stat-label">{t.stat_tools}</span>
           </div>
         </div>
+
+        <Link href="/chat" className="landing-cta">{t.cta}</Link>
+      </section>
+
+      {/* ── How it works ─────────────────────────── */}
+      <section className="landing-how">
+        <h2 className="landing-section-title">{t.how_title}</h2>
+        <div className="landing-steps">
+          {t.steps.map((s) => (
+            <div key={s.num} className="landing-step">
+              <div className="landing-step-num">{s.num}</div>
+              <div className="landing-step-title">{s.title}</div>
+              <div className="landing-step-desc">{s.desc}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Features ─────────────────────────────── */}
+      <div className="landing-features">
+        {t.features.map((f, i) => (
+          <div key={i} className="landing-feature-card">
+            <span className="lf-icon">{f.icon}</span>
+            <div>
+              <div className="lf-title">{f.title}</div>
+              <div className="lf-desc">{f.desc}</div>
+            </div>
+          </div>
+        ))}
       </div>
+
+      {/* ── Bottom CTA ───────────────────────────── */}
+      <Link href="/chat" className="landing-cta" style={{ marginBottom: 40 }}>
+        {t.cta}
+      </Link>
+
+      <p className="landing-footer">{t.footer}</p>
     </div>
   );
 }

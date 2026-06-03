@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Humora AI — Biznes Maslahatchi",
+  title: "Biznes Maslahatchi",
   description:
     "O'zbekistonda biznes boshlash va rivojlantirish uchun AI maslahatchi. 1.6 mln kompaniya ma'lumotlari asosida.",
-  keywords: ["biznes maslahat", "uzbekistan business", "SMB advisor", "humora"],
+  keywords: ["biznes maslahat", "uzbekistan business", "SMB advisor"],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
