@@ -24,7 +24,7 @@ interface Message {
 
 // ─── Constants ───────────────────────────────────────
 
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://maslahatchi.humora.uz";
 
 const TOOL_LABELS: Record<string, Record<Lang, string>> = {
   lookup_oked:          { uz: "Faoliyat kodi aniqlanmoqda",        ru: "Определение кода ОКЭД",  en: "Looking up OKED code"    },
